@@ -1,8 +1,9 @@
 import {BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Chat from "./pages/Chat";
-import Chats from "./pages/Chats"
+
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ProtectedRoute from './routes/ProtectedRoute';
 
 function App() {
   return (
@@ -12,8 +13,7 @@ function App() {
           <Route path = "/" element={<Navigate to ="/login"/>}/>
           <Route path = "/login" element = {<Login/>}/>
           <Route path = "/register" element = {<Register/>}/>
-          <Route path = "/chats" element = {<Chats/>}/>
-          <Route path = "/chat/:id" element = {<Chat/>}/>
+          <Route path = "/chat" element = {<ProtectedRoute><Chat/></ProtectedRoute>}/>
         </Routes>
       </BrowserRouter>
     </>
