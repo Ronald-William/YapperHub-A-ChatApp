@@ -5,6 +5,7 @@ import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js"
 import msgRoutes from "./routes/msgRoutes.js"
 
+
 const app = express();
 
 app.use(
@@ -15,11 +16,8 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-
 app.use(express.json());
 app.use(cookieParser());
-
-
 app.use("/api/users", authRoutes);
 app.use("/api/messages", msgRoutes);
 

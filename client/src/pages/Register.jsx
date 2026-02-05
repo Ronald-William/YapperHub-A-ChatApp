@@ -9,11 +9,13 @@ export default function Register() {
 
   const [form, setForm] = useState({
     name: "",
+    username: "",
     email: "",
     password: ""
   });
 
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -22,14 +24,17 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
-      const res = await api.post("/api/users/register", form);
+      const res = await api.post("/users/register", form);
 
       setUser(res.data);
       navigate("/chat");
     } catch (err) {
       setError(err.response?.data?.message || "Registration failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -47,7 +52,15 @@ export default function Register() {
 
         <input
           name="name"
-          placeholder="Name"
+          placeholder="Full Name"
+          required
+          onChange={handleChange}
+          className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:outline-none"
+        />
+
+        <input
+          name="username"
+          placeholder="Username (unique)"
           required
           onChange={handleChange}
           className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:outline-none"
@@ -71,8 +84,11 @@ export default function Register() {
           className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:outline-none"
         />
 
-        <button className="w-full bg-white text-black py-2 rounded font-medium hover:opacity-90">
-          Register
+        <button
+          disabled={loading}
+          className="w-full bg-white text-black py-2 rounded font-medium hover:opacity-90 disabled:opacity-60"
+        >
+          {loading ? "Creating account..." : "Register"}
         </button>
 
         <p className="text-sm text-center">

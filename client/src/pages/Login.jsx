@@ -8,11 +8,12 @@ export default function Login() {
   const { setUser } = useAuth();
 
   const [form, setForm] = useState({
-    email: "",
+    identifier: "",
     password: ""
   });
 
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -21,14 +22,17 @@ export default function Login() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setLoading(true);
 
     try {
-      const res = await api.post("/api/users/login", form);
+      const res = await api.post("/users/login", form);
 
       setUser(res.data);
       navigate("/chat");
     } catch (err) {
       setError(err.response?.data?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,9 +49,8 @@ export default function Login() {
         )}
 
         <input
-          name="email"
-          type="email"
-          placeholder="Email"
+          name="identifier"
+          placeholder="Email or Username"
           required
           onChange={handleChange}
           className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:outline-none"
@@ -62,8 +65,11 @@ export default function Login() {
           className="w-full p-2 rounded bg-zinc-800 border border-zinc-700 focus:outline-none"
         />
 
-        <button className="w-full bg-white text-black py-2 rounded font-medium hover:opacity-90">
-          Login
+        <button
+          disabled={loading}
+          className="w-full bg-white text-black py-2 rounded font-medium hover:opacity-90 disabled:opacity-60"
+        >
+          {loading ? "Logging in..." : "Login"}
         </button>
 
         <p className="text-sm text-center">
