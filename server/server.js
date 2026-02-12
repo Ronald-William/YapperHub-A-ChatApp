@@ -15,39 +15,35 @@ export const io = new Server(myServer, {
   }
 });
 
-const users = new Map();     // userId -> socketId
-const sockets = new Map();   // socketId -> userId
-
-
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("connected:", socket.id);
 
-  socket.on("join", (userId) => {
-    users.set(userId, socket.id);
-    sockets.set(socket.id, userId);
+  socket.on("joinUser", (userId) => {
+    console.log(`User ${userId} joined their personal room`);
+    socket.join(userId);
   });
 
+  socket.on("joinConversation", (convoId) => {
+    console.log(`Socket ${socket.id} joined conversation: ${convoId}`);
+    socket.join(convoId);
+  });
+
+  socket.on("leaveConversation", (convoId) => {
+    console.log(`Socket ${socket.id} left conversation: ${convoId}`);
+    socket.leave(convoId);
+  });
 
   socket.on("disconnect", () => {
-    const userId = sockets.get(socket.id);
-
-    if (userId) {
-      users.delete(userId);
-      sockets.delete(socket.id);
-      console.log("deleted:", userId);
-    }
+    console.log("disconnected:", socket.id);
   });
-
 });
 
-export const getSocketId = (userId) => users.get(userId);
-
-const startServer = async () => {
+const start = async () => {
   await connectDB();
 
   myServer.listen(process.env.PORT || 5000, () => {
-    console.log("Server running with socket");
+    console.log("server running");
   });
 };
 
-startServer();
+start();

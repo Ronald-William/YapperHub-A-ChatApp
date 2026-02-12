@@ -1,7 +1,11 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
-import api from "../services/api";
 import { useAuth } from "../context/AuthContext";
+import { getMessages } from "../services/chatApi";
+
+import Sidebar from "../components/Sidebar";
+import MessageList from "../components/MessageList";
+import MessageInput from "../components/MessageInput";
 
 const socket = io("http://localhost:5000", {
   withCredentials: true
@@ -10,121 +14,125 @@ const socket = io("http://localhost:5000", {
 export default function Chat() {
   const { user } = useAuth();
 
+  const [activeId, setActiveId] = useState(null);
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  const [inputUsername, setInputUsername] = useState("");
-  const [receiverUsername, setReceiverUsername] = useState("");
-
-  const bottomRef = useRef();
-
-  const scrollToBottom = () => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  /* ----------------------------
-     Fetch ONLY after connect
-  -----------------------------*/
-  const connectUser = async () => {
-    if (!inputUsername.trim()) return;
-
-    try {
-      const res = await api.get(`/messages/${inputUsername}`);
-      setMessages(res.data);
-      setReceiverUsername(inputUsername);
-    } catch {
-      setMessages([]);
-    }
-  };
-
-  /* ----------------------------
-     Socket listener
-  -----------------------------*/
+  // Socket connection status
   useEffect(() => {
-    socket.on("newMessage", (msg) => {
-      setMessages((prev) => [...prev, msg]);
+    socket.on("connect", () => {
+      console.log("Socket connected:", socket.id);
     });
 
-    return () => socket.off("newMessage");
+    socket.on("connect_error", (err) => {
+      console.error("Socket connection error:", err);
+    });
+
+    return () => {
+      socket.off("connect");
+      socket.off("connect_error");
+    };
   }, []);
 
-  /* ----------------------------
-     Join socket
-  -----------------------------*/
+  // Join user's room
   useEffect(() => {
-    if (!user) return;
-    socket.emit("join", user._id);
+    if (!user) {
+      console.warn("No user found, cannot join socket room");
+      return;
+    }
+    
+    console.log("Joining room for user:", user._id);
+    socket.emit("joinUser", user._id);
   }, [user]);
 
-  useEffect(scrollToBottom, [messages]);
+  // Load messages and join conversation room when conversation changes
+  useEffect(() => {
+    if (!activeId) {
+      setMessages([]);
+      return;
+    }
 
-  /* ----------------------------
-     Send message
-  -----------------------------*/
-  const sendMessage = async () => {
-    if (!text.trim() || !receiverUsername) return;
+    // Join the conversation room for real-time updates
+    console.log("Joining conversation room:", activeId);
+    socket.emit("joinConversation", activeId);
 
-    const res = await api.post("/messages", {
-      receiverUsername,
-      text
-    });
+    const load = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        console.log("Loading messages for conversation:", activeId);
+        const res = await getMessages(activeId);
+        
+        console.log("Messages loaded:", res.data);
+        setMessages(res.data || []);
+      } catch (err) {
+        console.error("Error loading messages:", err);
+        setError(err.message || "Failed to load messages");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    setMessages((prev) => [...prev, res.data]);
-    setText("");
-  };
+    load();
+
+    // Cleanup: leave the conversation room when switching
+    return () => {
+      console.log("Leaving conversation room:", activeId);
+      socket.emit("leaveConversation", activeId);
+    };
+  }, [activeId]);
+
+  // Listen for new messages
+  useEffect(() => {
+    const handleNewMessage = (msg) => {
+      console.log("New message received via socket:", msg);
+      
+      if (msg.conversation === activeId) {
+        setMessages((prev) => [...prev, msg]);
+      }
+    };
+
+    socket.on("newMessage", handleNewMessage);
+
+    return () => socket.off("newMessage", handleNewMessage);
+  }, [activeId]);
 
   return (
-    <div className="h-screen bg-black text-white flex flex-col p-4">
+    <div className="h-screen bg-black text-white flex">
+      <Sidebar activeId={activeId} setActiveId={setActiveId} />
 
-      {/* username input */}
-      <div className="flex gap-2 mb-3">
-        <input
-          className="flex-1 p-2 rounded bg-zinc-800"
-          placeholder="Receiver username"
-          value={inputUsername}
-          onChange={(e) => setInputUsername(e.target.value)}
-        />
-
-        <button
-          onClick={connectUser}
-          className="px-4 bg-green-600 rounded hover:bg-green-700"
-        >
-          Connect
-        </button>
-      </div>
-
-      {/* messages */}
-      <div className="flex-1 overflow-y-auto mb-3 flex flex-col gap-2">
-        {messages.map((m, i) => (
-          <div
-            key={i}
-            className={`max-w-xs p-2 rounded-lg ${
-              String(m.sender) === String(user._id)
-                ? "bg-blue-600 ml-auto"
-                : "bg-zinc-700"
-            }`}
-          >
-            {m.text}
+      <div className="flex-1 flex flex-col">
+        {activeId ? (
+          <>
+            {loading ? (
+              <div className="flex-1 flex items-center justify-center text-zinc-500">
+                Loading messages...
+              </div>
+            ) : error ? (
+              <div className="flex-1 flex items-center justify-center text-red-500">
+                Error: {error}
+              </div>
+            ) : (
+              <>
+                <MessageList messages={messages} user={user} />
+                <MessageInput
+                  convoId={activeId}
+                  onNew={(msg) => {
+                    console.log("Message sent:", msg);
+                    // Don't add here - let the socket event handle it
+                    // This prevents duplicate messages on sender side
+                  }}
+                />
+              </>
+            )}
+          </>
+        ) : (
+          <div className="flex-1 flex items-center justify-center text-zinc-500">
+            Select a chat to start messaging
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      {/* send */}
-      <div className="flex gap-2">
-        <input
-          className="flex-1 p-2 rounded bg-zinc-800"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Type message..."
-        />
-
-        <button
-          onClick={sendMessage}
-          className="px-4 bg-blue-600 rounded hover:bg-blue-700"
-        >
-          Send
-        </button>
+        )}
       </div>
     </div>
   );
