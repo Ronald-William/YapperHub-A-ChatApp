@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { createConversation } from "../services/chatApi";
+import api from "../services/api";
 
-export default function AddFriendModal({ onClose, onFriendAdded }) {
+export default function AddFriendModal({ onClose, onRequestSent }) {
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -17,16 +18,28 @@ export default function AddFriendModal({ onClose, onFriendAdded }) {
     try {
       setLoading(true);
       setError(null);
+      setSuccess(false);
 
-      // Call the API to create a conversation
-      const response = await createConversation(username.trim());
+      // Send friend request
+      const response = await api.post("/friends/request", { 
+        username: username.trim() 
+      });
+      
+      setSuccess(true);
       
       // Notify parent component
-      onFriendAdded(response.data);
-      onClose();
+      if (onRequestSent) {
+        onRequestSent(response.data);
+      }
+
+      // Auto-close after success
+      setTimeout(() => {
+        onClose();
+      }, 1500);
+
     } catch (err) {
-      console.error("Error adding friend:", err);
-      setError(err.response?.data?.message || err.message || "Failed to add friend");
+      console.error("Error sending friend request:", err);
+      setError(err.response?.data?.message || err.message || "Failed to send request");
     } finally {
       setLoading(false);
     }
@@ -49,12 +62,19 @@ export default function AddFriendModal({ onClose, onFriendAdded }) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoFocus
+              disabled={loading || success}
             />
           </div>
 
           {error && (
             <div className="mb-4 p-3 bg-red-900 bg-opacity-30 border border-red-700 rounded text-red-400 text-sm">
               {error}
+            </div>
+          )}
+
+          {success && (
+            <div className="mb-4 p-3 bg-green-900 bg-opacity-30 border border-green-700 rounded text-green-400 text-sm">
+              Friend request sent successfully! ✓
             </div>
           )}
 
@@ -65,15 +85,17 @@ export default function AddFriendModal({ onClose, onFriendAdded }) {
               className="flex-1 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded transition-colors"
               disabled={loading}
             >
-              Cancel
+              {success ? 'Close' : 'Cancel'}
             </button>
-            <button
-              type="submit"
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={loading}
-            >
-              {loading ? "Adding..." : "Add Friend"}
-            </button>
+            {!success && (
+              <button
+                type="submit"
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading}
+              >
+                {loading ? "Sending..." : "Send Request"}
+              </button>
+            )}
           </div>
         </form>
       </div>
