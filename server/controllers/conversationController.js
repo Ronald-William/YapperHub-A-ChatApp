@@ -46,7 +46,7 @@ export const createConversation = async (req, res) => {
     // Find the friend by username
     const friend = await User.findOne({ 
       username: friendUsername.trim() 
-    }).select('_id username name friends');
+    }).select('_id username name');
 
     if (!friend) {
       return res.status(404).json({ 
@@ -54,24 +54,20 @@ export const createConversation = async (req, res) => {
       });
     }
 
-    // Prevent adding yourself
+    // Prevent creating conversation with yourself
     if (friend._id.toString() === currentUserId.toString()) {
       return res.status(400).json({ 
-        message: 'You cannot add yourself as a friend' 
+        message: 'You cannot create a conversation with yourself' 
       });
     }
 
-    // Add to friends list if not already friends
+    // Check if they are friends
     const currentUser = await User.findById(currentUserId);
     
     if (!currentUser.friends.includes(friend._id)) {
-      currentUser.friends.push(friend._id);
-      await currentUser.save();
-    }
-
-    if (!friend.friends.includes(currentUserId)) {
-      friend.friends.push(currentUserId);
-      await friend.save();
+      return res.status(400).json({ 
+        message: 'You can only create conversations with friends. Send a friend request first!' 
+      });
     }
 
     // Check if conversation already exists
@@ -100,7 +96,7 @@ export const createConversation = async (req, res) => {
       .populate('participants', 'username name');
 
     res.status(201).json({ 
-      message: 'Friend added successfully',
+      message: 'Conversation created successfully',
       _id: populatedConvo._id,
       participants: populatedConvo.participants,
       friend: friend

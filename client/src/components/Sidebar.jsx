@@ -1,15 +1,17 @@
 import { useEffect, useState } from "react";
 import { getConversations } from "../services/chatApi";
 import AddFriendModal from "./AddFriendModal";
+import FriendRequests from "./FriendRequests";
 import api from "../services/api";
 
 export default function Sidebar({ activeId, setActiveId }) {
   const [convos, setConvos] = useState([]);
   const [friends, setFriends] = useState([]);
+  const [requestsCount, setRequestsCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showAddFriend, setShowAddFriend] = useState(false);
-  const [activeTab, setActiveTab] = useState("conversations"); // "conversations" or "friends"
+  const [activeTab, setActiveTab] = useState("conversations"); // "conversations", "friends", or "requests"
 
   const loadConversations = async () => {
     try {
@@ -26,13 +28,10 @@ export default function Sidebar({ activeId, setActiveId }) {
       // Handle both {data: [...]} and direct array responses
       let conversationsData;
       if (res.data && res.data.data && Array.isArray(res.data.data)) {
-        // Response is {data: {data: [...]}}
         conversationsData = res.data.data;
       } else if (res.data && Array.isArray(res.data)) {
-        // Response is {data: [...]}
         conversationsData = res.data;
       } else if (Array.isArray(res.data)) {
-        // Response is direct array
         conversationsData = res.data;
       } else {
         console.warn("Unexpected response format:", res);
@@ -41,13 +40,9 @@ export default function Sidebar({ activeId, setActiveId }) {
       
       console.log("Final conversations array:", conversationsData);
       
-      // Debug: Log each conversation structure
       if (conversationsData.length > 0) {
         conversationsData.forEach((convo, index) => {
           console.log(`Conversation ${index}:`, convo);
-          console.log(`  - ID: ${convo._id}`);
-          console.log(`  - Friend:`, convo.friend);
-          console.log(`  - Participants:`, convo.participants);
         });
       }
       
@@ -55,7 +50,7 @@ export default function Sidebar({ activeId, setActiveId }) {
     } catch (err) {
       console.error("Error loading conversations:", err);
       setError(err.message || "Failed to load conversations");
-      setConvos([]); // Ensure it's always an array
+      setConvos([]);
     } finally {
       setLoading(false);
     }
@@ -66,55 +61,95 @@ export default function Sidebar({ activeId, setActiveId }) {
       const res = await api.get("/friends");
       console.log("Friends response:", res);
       console.log("Friends data:", res.data);
-      console.log("Type:", typeof res.data);
-      console.log("Is array?", Array.isArray(res.data));
       
-      // Ensure we always set an array
       const friendsData = Array.isArray(res.data) ? res.data : [];
       setFriends(friendsData);
     } catch (err) {
       console.error("Error loading friends:", err);
-      setFriends([]); // Ensure it's always an array on error
+      setFriends([]);
+    }
+  };
+
+  const loadRequestsCount = async () => {
+    try {
+      const res = await api.get("/friends/requests");
+      const requests = Array.isArray(res.data) ? res.data : [];
+      setRequestsCount(requests.length);
+    } catch (err) {
+      console.error("Error loading requests count:", err);
+      setRequestsCount(0);
     }
   };
 
   useEffect(() => {
     loadConversations();
     loadFriends();
+    loadRequestsCount();
   }, []);
 
-  const handleFriendAdded = (newConvo) => {
-    console.log("Friend added:", newConvo);
-    // Reload both conversations and friends
+  const handleRequestSent = () => {
+    console.log("Friend request sent");
+    // No need to reload anything, just close modal
+  };
+
+  const handleRequestHandled = (newConversation) => {
+    console.log("Friend request handled (accepted/rejected)");
+    console.log("New conversation:", newConversation);
+    
+    // Reload everything
     loadConversations();
     loadFriends();
-    // Optionally auto-select the new conversation
-    if (newConvo?._id) {
-      setActiveId(newConvo._id);
+    loadRequestsCount();
+    
+    // If a conversation was created (accepted), auto-select it
+    if (newConversation && newConversation._id) {
+      setTimeout(() => {
+        setActiveId(newConversation._id);
+        setActiveTab("conversations");
+      }, 500); // Small delay to let conversations load
+    } else {
+      // Just switch to conversations tab
       setActiveTab("conversations");
     }
   };
 
   const handleFriendClick = async (friend) => {
-    // Find or create conversation with this friend
+    console.log("Friend clicked:", friend);
+    
+    // Find existing conversation with this friend
     const existingConvo = convos.find(c => 
       c.participants?.some(p => p._id === friend._id)
     );
 
     if (existingConvo) {
+      // Conversation exists, open it
+      console.log("Found existing conversation:", existingConvo._id);
       setActiveId(existingConvo._id);
       setActiveTab("conversations");
     } else {
-      // Create conversation by adding friend
+      // No conversation yet - this shouldn't happen if friend request was accepted
+      // But just in case, let's handle it gracefully
+      console.log("No conversation found with friend, this is unusual");
+      
       try {
-        const response = await api.post("/conversations", { 
-          friendUsername: friend.username 
+        // Try to create a conversation
+        const res = await api.post("/conversations", {
+          friendUsername: friend.username
         });
-        setActiveId(response.data._id);
-        loadConversations();
-        setActiveTab("conversations");
+        
+        console.log("Created conversation:", res.data);
+        
+        // Reload conversations
+        await loadConversations();
+        
+        // Select the new conversation
+        if (res.data._id) {
+          setActiveId(res.data._id);
+          setActiveTab("conversations");
+        }
       } catch (err) {
         console.error("Error creating conversation:", err);
+        alert("Unable to start conversation. Please try again.");
       }
     }
   };
@@ -132,19 +167,34 @@ export default function Sidebar({ activeId, setActiveId }) {
       </button>
 
       {/* Tabs */}
-      <div className="flex border-b border-zinc-800 mx-4">
+      <div className="flex border-b border-zinc-800 mx-4 text-xs">
         <button
-          className={`flex-1 py-2 text-sm font-medium transition-colors ${
+          className={`flex-1 py-2 font-medium transition-colors ${
             activeTab === "conversations"
               ? "text-white border-b-2 border-blue-500"
               : "text-zinc-500 hover:text-zinc-300"
           }`}
           onClick={() => setActiveTab("conversations")}
         >
-          Conversations ({Array.isArray(convos) ? convos.length : 0})
+          Chats ({Array.isArray(convos) ? convos.length : 0})
         </button>
         <button
-          className={`flex-1 py-2 text-sm font-medium transition-colors ${
+          className={`flex-1 py-2 font-medium transition-colors relative ${
+            activeTab === "requests"
+              ? "text-white border-b-2 border-blue-500"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+          onClick={() => setActiveTab("requests")}
+        >
+          Requests
+          {requestsCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              {requestsCount}
+            </span>
+          )}
+        </button>
+        <button
+          className={`flex-1 py-2 font-medium transition-colors ${
             activeTab === "friends"
               ? "text-white border-b-2 border-blue-500"
               : "text-zinc-500 hover:text-zinc-300"
@@ -170,6 +220,7 @@ export default function Sidebar({ activeId, setActiveId }) {
             onClick={() => {
               loadConversations();
               loadFriends();
+              loadRequestsCount();
             }}
             className="block mx-auto mt-2 text-blue-500 hover:underline"
           >
@@ -184,12 +235,11 @@ export default function Sidebar({ activeId, setActiveId }) {
           {!Array.isArray(convos) || convos.length === 0 ? (
             <div className="p-4 text-center text-zinc-500 text-sm">
               No conversations yet.<br />
-              Click on a friend to start chatting!
+              Accept friend requests to start chatting!
             </div>
           ) : (
             <div className="flex-1">
               {convos.map((c) => {
-                // Find the friend (the other participant)
                 const friend = c.friend || 
                               c.participants?.find(p => p._id !== c.participants[0]._id) ||
                               c.participants?.[0];
@@ -204,7 +254,6 @@ export default function Sidebar({ activeId, setActiveId }) {
                       activeId === c._id ? "bg-zinc-800" : ""
                     }`}
                   >
-                    {/* Display username */}
                     <div className="font-medium">
                       {displayName}
                     </div>
@@ -221,13 +270,18 @@ export default function Sidebar({ activeId, setActiveId }) {
         </>
       )}
 
+      {/* Friend Requests Tab */}
+      {!loading && !error && activeTab === "requests" && (
+        <FriendRequests onRequestHandled={handleRequestHandled} />
+      )}
+
       {/* Friends Tab */}
       {!loading && !error && activeTab === "friends" && (
         <>
           {!Array.isArray(friends) || friends.length === 0 ? (
             <div className="p-4 text-center text-zinc-500 text-sm">
               No friends yet.<br />
-              Add some friends to start chatting!
+              Send friend requests to add friends!
             </div>
           ) : (
             <div className="flex-1">
@@ -256,7 +310,7 @@ export default function Sidebar({ activeId, setActiveId }) {
       {showAddFriend && (
         <AddFriendModal
           onClose={() => setShowAddFriend(false)}
-          onFriendAdded={handleFriendAdded}
+          onRequestSent={handleRequestSent}
         />
       )}
     </div>
