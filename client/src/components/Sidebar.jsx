@@ -4,7 +4,7 @@ import AddFriendModal from "./AddFriendModal";
 import FriendRequests from "./FriendRequests";
 import api from "../services/api";
 
-export default function Sidebar({ activeId, setActiveId }) {
+export default function Sidebar({ activeId, setActiveId, onlineUsers = new Set() }) {
   const [convos, setConvos] = useState([]);
   const [friends, setFriends] = useState([]);
   const [requestsCount, setRequestsCount] = useState(0);
@@ -17,14 +17,14 @@ export default function Sidebar({ activeId, setActiveId }) {
     try {
       setLoading(true);
       setError(null);
-      
+
       const res = await getConversations();
-      
+
       console.log("API Response:", res);
       console.log("Conversations data:", res.data);
       console.log("Type of res.data:", typeof res.data);
       console.log("Is array?", Array.isArray(res.data));
-      
+
       // Handle both {data: [...]} and direct array responses
       let conversationsData;
       if (res.data && res.data.data && Array.isArray(res.data.data)) {
@@ -37,15 +37,15 @@ export default function Sidebar({ activeId, setActiveId }) {
         console.warn("Unexpected response format:", res);
         conversationsData = [];
       }
-      
+
       console.log("Final conversations array:", conversationsData);
-      
+
       if (conversationsData.length > 0) {
         conversationsData.forEach((convo, index) => {
           console.log(`Conversation ${index}:`, convo);
         });
       }
-      
+
       setConvos(conversationsData);
     } catch (err) {
       console.error("Error loading conversations:", err);
@@ -61,7 +61,7 @@ export default function Sidebar({ activeId, setActiveId }) {
       const res = await api.get("/friends");
       console.log("Friends response:", res);
       console.log("Friends data:", res.data);
-      
+
       const friendsData = Array.isArray(res.data) ? res.data : [];
       setFriends(friendsData);
     } catch (err) {
@@ -95,12 +95,12 @@ export default function Sidebar({ activeId, setActiveId }) {
   const handleRequestHandled = (newConversation) => {
     console.log("Friend request handled (accepted/rejected)");
     console.log("New conversation:", newConversation);
-    
+
     // Reload everything
     loadConversations();
     loadFriends();
     loadRequestsCount();
-    
+
     // If a conversation was created (accepted), auto-select it
     if (newConversation && newConversation._id) {
       setTimeout(() => {
@@ -115,9 +115,9 @@ export default function Sidebar({ activeId, setActiveId }) {
 
   const handleFriendClick = async (friend) => {
     console.log("Friend clicked:", friend);
-    
+
     // Find existing conversation with this friend
-    const existingConvo = convos.find(c => 
+    const existingConvo = convos.find(c =>
       c.participants?.some(p => p._id === friend._id)
     );
 
@@ -130,18 +130,18 @@ export default function Sidebar({ activeId, setActiveId }) {
       // No conversation yet - this shouldn't happen if friend request was accepted
       // But just in case, let's handle it gracefully
       console.log("No conversation found with friend, this is unusual");
-      
+
       try {
         // Try to create a conversation
         const res = await api.post("/conversations", {
           friendUsername: friend.username
         });
-        
+
         console.log("Created conversation:", res.data);
-        
+
         // Reload conversations
         await loadConversations();
-        
+
         // Select the new conversation
         if (res.data._id) {
           setActiveId(res.data._id);
@@ -153,13 +153,13 @@ export default function Sidebar({ activeId, setActiveId }) {
       }
     }
   };
-  
+
   return (
     <div className="w-64 bg-zinc-900 border-r border-zinc-800 overflow-y-auto flex flex-col">
       <h2 className="p-4 font-semibold text-lg">Chats</h2>
-      
+
       {/* Add Friend Button */}
-      <button 
+      <button
         className="mx-4 mb-4 p-2 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
         onClick={() => setShowAddFriend(true)}
       >
@@ -169,21 +169,19 @@ export default function Sidebar({ activeId, setActiveId }) {
       {/* Tabs */}
       <div className="flex border-b border-zinc-800 mx-4 text-xs">
         <button
-          className={`flex-1 py-2 font-medium transition-colors ${
-            activeTab === "conversations"
-              ? "text-white border-b-2 border-blue-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          }`}
+          className={`flex-1 py-2 font-medium transition-colors ${activeTab === "conversations"
+            ? "text-white border-b-2 border-blue-500"
+            : "text-zinc-500 hover:text-zinc-300"
+            }`}
           onClick={() => setActiveTab("conversations")}
         >
           Chats ({Array.isArray(convos) ? convos.length : 0})
         </button>
         <button
-          className={`flex-1 py-2 font-medium transition-colors relative ${
-            activeTab === "requests"
-              ? "text-white border-b-2 border-blue-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          }`}
+          className={`flex-1 py-2 font-medium transition-colors relative ${activeTab === "requests"
+            ? "text-white border-b-2 border-blue-500"
+            : "text-zinc-500 hover:text-zinc-300"
+            }`}
           onClick={() => setActiveTab("requests")}
         >
           Requests
@@ -194,11 +192,10 @@ export default function Sidebar({ activeId, setActiveId }) {
           )}
         </button>
         <button
-          className={`flex-1 py-2 font-medium transition-colors ${
-            activeTab === "friends"
-              ? "text-white border-b-2 border-blue-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          }`}
+          className={`flex-1 py-2 font-medium transition-colors ${activeTab === "friends"
+            ? "text-white border-b-2 border-blue-500"
+            : "text-zinc-500 hover:text-zinc-300"
+            }`}
           onClick={() => setActiveTab("friends")}
         >
           Friends ({Array.isArray(friends) ? friends.length : 0})
@@ -216,7 +213,7 @@ export default function Sidebar({ activeId, setActiveId }) {
       {error && (
         <div className="p-4 text-center text-red-500 text-sm">
           Error: {error}
-          <button 
+          <button
             onClick={() => {
               loadConversations();
               loadFriends();
@@ -240,33 +237,42 @@ export default function Sidebar({ activeId, setActiveId }) {
           ) : (
             <div className="flex-1">
               {convos.map((c) => {
-                const friend = c.friend || 
-                              c.participants?.find(p => p._id !== c.participants[0]._id) ||
-                              c.participants?.[0];
-                
+                const friend = c.friend ||
+                  c.participants?.find(p => p._id !== c.participants[0]._id) ||
+                  c.participants?.[0];
+
                 const displayName = friend?.username || friend?.name || "Unknown User";
-                
+                const isOnline = onlineUsers.has(friend?._id);
                 return (
                   <div
                     key={c._id}
                     onClick={() => setActiveId(c._id)}
-                    className={`p-3 cursor-pointer hover:bg-zinc-800 transition-colors ${
-                      activeId === c._id ? "bg-zinc-800" : ""
-                    }`}
+                    className={`p-3 cursor-pointer hover:bg-zinc-800 transition-colors ${activeId === c._id ? "bg-zinc-800" : ""
+                      }`}
                   >
-                    <div className="font-medium">
-                      {displayName}
-                    </div>
-                    {c.lastMessage && (
-                      <div className="text-sm text-zinc-500 truncate">
-                        {c.lastMessage}
+                    <div className="flex items-center gap-2">
+                      {/* ✨ NEW: Online indicator */}
+                      <div className={`w-2 h-2 rounded-full ${
+                        isOnline ? 'bg-green-500' : 'bg-zinc-600'
+                      }`} />
+                      
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {displayName}
+                        </div>
+                        {c.lastMessage && (
+                          <div className="text-sm text-zinc-500 truncate">
+                            {c.lastMessage}
+                          </div>
+                        )}
                       </div>
-                    )}
+                    </div>
                   </div>
                 );
               })}
             </div>
-          )}
+          )
+          }
         </>
       )}
 
@@ -280,27 +286,39 @@ export default function Sidebar({ activeId, setActiveId }) {
         <>
           {!Array.isArray(friends) || friends.length === 0 ? (
             <div className="p-4 text-center text-zinc-500 text-sm">
-              No friends yet.<br />
-              Send friend requests to add friends!
+              No friends yet.
             </div>
           ) : (
             <div className="flex-1">
-              {friends.map((friend) => (
-                <div
-                  key={friend._id}
-                  onClick={() => handleFriendClick(friend)}
-                  className="p-3 cursor-pointer hover:bg-zinc-800 transition-colors"
-                >
-                  <div className="font-medium">
-                    {friend.username}
-                  </div>
-                  {friend.name && (
-                    <div className="text-sm text-zinc-500">
-                      {friend.name}
+              {friends.map((friend) => {
+                const isOnline = onlineUsers.has(friend._id); 
+
+                return (
+                  <div
+                    key={friend._id}
+                    onClick={() => handleFriendClick(friend)}
+                    className="p-3 cursor-pointer hover:bg-zinc-800 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      
+                      <div className={`w-2 h-2 rounded-full ${
+                        isOnline ? 'bg-green-500' : 'bg-zinc-600'
+                      }`} />
+                      
+                      <div>
+                        <div className="font-medium">
+                          {friend.username}
+                        </div>
+                        {friend.name && (
+                          <div className="text-sm text-zinc-500">
+                            {friend.name}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </div>
+                );
+              })}
             </div>
           )}
         </>

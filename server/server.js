@@ -5,6 +5,7 @@ import app from "./app.js";
 import connectDB from "./config/db.js";
 import http from "http";
 import { Server } from "socket.io";
+import redis from "./config/redis.js"
 
 const myServer = http.createServer(app);
 
@@ -17,10 +18,14 @@ export const io = new Server(myServer, {
 
 io.on("connection", (socket) => {
   console.log("connected:", socket.id);
-
-  socket.on("joinUser", (userId) => {
+  let currentUserId = null;
+  socket.on("joinUser", async(userId) => {
     console.log(`User ${userId} joined their personal room`);
     socket.join(userId);
+    currentUserId = userId;
+
+    await redis.setex(`online: ${userId} joined`,300,Date.now().toString());
+    io.emit("userOnline",userId);
   });
 
   socket.on("joinConversation", (convoId) => {
@@ -31,10 +36,21 @@ io.on("connection", (socket) => {
   socket.on("leaveConversation", (convoId) => {
     console.log(`Socket ${socket.id} left conversation: ${convoId}`);
     socket.leave(convoId);
-  });
 
-  socket.on("disconnect", () => {
+  });
+  
+  socket.on("heartbeat",async(userId)=>{
+    await redis.setex(`online: ${userId}`,300,Date.now().toString());
+  })
+
+  socket.on("disconnect", async() => {
+    
     console.log("disconnected:", socket.id);
+
+    if(currentUserId){
+      await redis.del(`online: ${currentUserId}`);
+      io.emit("userOffline",currentUserId);
+    }
   });
 });
 
